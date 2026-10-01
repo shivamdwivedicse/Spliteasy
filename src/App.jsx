@@ -24,6 +24,7 @@ export default function App() {
     description: '',
     amount: '',
     paidBy: '',
+    type: 'shared',
     splitBetween: {}
   });
   const [copyMessage, setCopyMessage] = useState('');
@@ -94,10 +95,14 @@ export default function App() {
       alert('Please select who paid');
       return;
     }
-    const splitPeople = Object.keys(expenseForm.splitBetween).filter(p => expenseForm.splitBetween[p]);
-    if (splitPeople.length === 0) {
-      alert('Please select at least one person for the split');
-      return;
+    
+    // For shared expenses, at least one person must be selected
+    if (expenseForm.type === 'shared') {
+      const splitPeople = Object.keys(expenseForm.splitBetween).filter(p => expenseForm.splitBetween[p]);
+      if (splitPeople.length === 0) {
+        alert('Please select at least one person for the split');
+        return;
+      }
     }
 
     const expense = {
@@ -105,7 +110,8 @@ export default function App() {
       description: expenseForm.description,
       amount: parseFloat(expenseForm.amount),
       paidBy: expenseForm.paidBy,
-      splitBetween: expenseForm.splitBetween
+      type: expenseForm.type,
+      splitBetween: expenseForm.type === 'personal' ? {} : expenseForm.splitBetween
     };
 
     setExpenses([...expenses, expense]);
@@ -113,6 +119,7 @@ export default function App() {
       description: '',
       amount: '',
       paidBy: '',
+      type: 'shared',
       splitBetween: {}
     });
   };
@@ -128,14 +135,17 @@ export default function App() {
     });
 
     expenses.forEach(expense => {
-      const splitPeople = Object.keys(expense.splitBetween).filter(p => expense.splitBetween[p]);
-      const perPerson = expense.amount / splitPeople.length;
+      // Only shared expenses create balances (for dues)
+      if (expense.type === 'shared') {
+        const splitPeople = Object.keys(expense.splitBetween).filter(p => expense.splitBetween[p]);
+        const perPerson = expense.amount / splitPeople.length;
 
-      balances[expense.paidBy] += expense.amount;
+        balances[expense.paidBy] += expense.amount;
 
-      splitPeople.forEach(person => {
-        balances[person] -= perPerson;
-      });
+        splitPeople.forEach(person => {
+          balances[person] -= perPerson;
+        });
+      }
     });
 
     return balances;
@@ -148,8 +158,14 @@ export default function App() {
     people.forEach(p => {
       let wallet = p.monthlyBudget;
       
-      // Subtract amount paid out
-      wallet -= balances[p.name] > 0 ? balances[p.name] : 0;
+      // Subtract all expenses paid out (personal + shared)
+      let totalPaid = 0;
+      expenses.forEach(exp => {
+        if (exp.paidBy === p.name) {
+          totalPaid += exp.amount;
+        }
+      });
+      wallet -= totalPaid;
       
       // Add repayments received
       repayments.forEach(rep => {
@@ -165,6 +181,12 @@ export default function App() {
     });
     
     return wallets;
+  };
+
+  const calculatePersonalSpending = (personName) => {
+    return expenses
+      .filter(exp => exp.paidBy === personName && exp.type === 'personal')
+      .reduce((sum, exp) => sum + exp.amount, 0);
   };
 
   const calculateDues = () => {
@@ -281,6 +303,10 @@ export default function App() {
                       <span className="wallet-label">Monthly Budget:</span>
                       <span className="wallet-value">₹{person.monthlyBudget.toFixed(2)}</span>
                     </div>
+                    <div className="wallet-row">
+                      <span className="wallet-label">Personal Spending:</span>
+                      <span className="wallet-value">₹{calculatePersonalSpending(person.name).toFixed(2)}</span>
+                    </div>
                     <div className={`wallet-row ${wallet < 0 ? 'wallet-warning' : ''}`}>
                       <span className="wallet-label">Wallet Left:</span>
                       <span className={`wallet-value ${wallet < 0 ? 'wallet-negative' : ''}`}>
@@ -347,27 +373,58 @@ export default function App() {
             </select>
             <div>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
-                Split between:
+               Expense Type:
               </label>
-              <div className="checkbox-group">
-                {people.map(person => (
-                  <div key={person.name} className="checkbox-item">
-                    <input
-                      type="checkbox"
-                      id={`split-${person.name}`}
-                      checked={expenseForm.splitBetween[person.name] || false}
-                      onChange={() => handleSplitChange(person.name)}
-                    />
-                    <label htmlFor={`split-${person.name}`}>{person.name}</label>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <button onClick={addExpense} style={{ background: '#667eea' }}>
-              Add Expense
-            </button>
-          </div>
-        </div>
+             <div className="radio-group">
+               <div className="radio-item">
+                 <input
+                   type="radio"
+                   id="type-personal"
+                   name="type"
+                   value="personal"
+                   checked={expenseForm.type === 'personal'}
+                   onChange={handleExpenseFormChange}
+                 />
+                 <label htmlFor="type-personal">Personal (only for me)</label>
+               </div>
+               <div className="radio-item">
+                 <input
+                   type="radio"
+                   id="type-shared"
+                   name="type"
+                   value="shared"
+                   checked={expenseForm.type === 'shared'}
+                   onChange={handleExpenseFormChange}
+                 />
+                 <label htmlFor="type-shared">Shared (split with others)</label>
+               </div>
+             </div>
+           </div>
+           {expenseForm.type === 'shared' && (
+             <div>
+               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                 Split between:
+               </label>
+               <div className="checkbox-group">
+                 {people.map(person => (
+                   <div key={person.name} className="checkbox-item">
+                     <input
+                       type="checkbox"
+                       id={`split-${person.name}`}
+                       checked={expenseForm.splitBetween[person.name] || false}
+                       onChange={() => handleSplitChange(person.name)}
+                     />
+                     <label htmlFor={`split-${person.name}`}>{person.name}</label>
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
+           <button onClick={addExpense} style={{ background: '#667eea' }}>
+             Add Expense
+           </button>
+         </div>
+       </div>
       )}
 
       {/* Expenses List */}
@@ -375,6 +432,22 @@ export default function App() {
         <div className="card">
           <h2>📝 Expenses</h2>
           {expenses.map(expense => {
+            if (expense.type === 'personal') {
+              return (
+                <div key={expense.id} className="expense-item">
+                  <div className="expense-item-header">
+                    <span className="expense-item-desc">{expense.description}</span>
+                    <span className="expense-item-amount">₹{expense.amount.toFixed(2)}</span>
+                  </div>
+                  <div className="expense-item-details">
+                    <span>{expense.paidBy} paid (Personal) • No split</span>
+                    <button className="expense-item-delete" onClick={() => deleteExpense(expense.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            }
             const splitPeople = Object.keys(expense.splitBetween).filter(p => expense.splitBetween[p]);
             const perPerson = (expense.amount / splitPeople.length).toFixed(2);
             return (
@@ -384,7 +457,7 @@ export default function App() {
                   <span className="expense-item-amount">₹{expense.amount.toFixed(2)}</span>
                 </div>
                 <div className="expense-item-details">
-                  <span>{expense.paidBy} paid • Split among {splitPeople.length} people (₹{perPerson} each)</span>
+                  <span>{expense.paidBy} paid (Shared) • Split among {splitPeople.length} people (₹{perPerson} each)</span>
                   <button className="expense-item-delete" onClick={() => deleteExpense(expense.id)}>
                     Delete
                   </button>
