@@ -13,7 +13,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [repayments, setRepayments] = useState(() => {
+    const saved = localStorage.getItem('spliteasy-repayments');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [newPersonName, setNewPersonName] = useState('');
+  const [newPersonBudget, setNewPersonBudget] = useState('');
   const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
@@ -30,21 +36,30 @@ export default function App() {
     localStorage.setItem('spliteasy-expenses', JSON.stringify(expenses));
   }, [expenses]);
 
+  useEffect(() => {
+    localStorage.setItem('spliteasy-repayments', JSON.stringify(repayments));
+  }, [repayments]);
+
   const addPerson = () => {
     if (!newPersonName.trim()) {
       alert('Please enter a person name');
       return;
     }
-    if (people.some(p => p === newPersonName)) {
+    if (people.some(p => p.name === newPersonName)) {
       alert('This person already exists');
       return;
     }
-    setPeople([...people, newPersonName]);
+    if (!newPersonBudget || parseFloat(newPersonBudget) <= 0) {
+      alert('Please enter a valid monthly budget');
+      return;
+    }
+    setPeople([...people, { name: newPersonName, monthlyBudget: parseFloat(newPersonBudget) }]);
     setNewPersonName('');
+    setNewPersonBudget('');
   };
 
   const removePerson = (name) => {
-    setPeople(people.filter(p => p !== name));
+    setPeople(people.filter(p => p.name !== name));
     setExpenses(expenses.filter(e => e.paidBy !== name && !e.splitBetween[name]));
   };
 
@@ -109,7 +124,7 @@ export default function App() {
   const calculateBalances = () => {
     const balances = {};
     people.forEach(p => {
-      balances[p] = 0;
+      balances[p.name] = 0;
     });
 
     expenses.forEach(expense => {
@@ -124,6 +139,63 @@ export default function App() {
     });
 
     return balances;
+  };
+
+  const calculateWallets = () => {
+    const balances = calculateBalances();
+    const wallets = {};
+    
+    people.forEach(p => {
+      let wallet = p.monthlyBudget;
+      
+      // Subtract amount paid out
+      wallet -= balances[p.name] > 0 ? balances[p.name] : 0;
+      
+      // Add repayments received
+      repayments.forEach(rep => {
+        if (rep.to === p.name) {
+          wallet += rep.amount;
+        }
+        if (rep.from === p.name) {
+          wallet -= rep.amount;
+        }
+      });
+      
+      wallets[p.name] = wallet;
+    });
+    
+    return wallets;
+  };
+
+  const calculateDues = () => {
+    const balances = calculateBalances();
+    const dues = [];
+    
+    // Get settle up transactions
+    const transactions = settleUp(balances);
+    
+    // Filter out already paid dues
+    transactions.forEach(t => {
+      const isPaid = repayments.some(rep => 
+        rep.from === t.from && rep.to === t.to && rep.amount >= t.amount
+      );
+      if (!isPaid) {
+        dues.push(t);
+      }
+    });
+    
+    return dues;
+  };
+
+  const markAsPaid = (from, to, amount) => {
+    setRepayments([...repayments, { from, to, amount, id: Date.now() }]);
+  };
+
+  const resetMonth = () => {
+    if (confirm('Are you sure you want to reset the month? This will clear all expenses and repayments.')) {
+      setExpenses([]);
+      setRepayments([]);
+    }
   };
 
   const balances = calculateBalances();
@@ -150,6 +222,15 @@ export default function App() {
     <div className="container">
       <h1>💰 SplitEasy</h1>
 
+      {/* New Month Button */}
+      {people.length > 0 && expenses.length > 0 && (
+        <div className="card">
+          <button onClick={resetMonth} className="reset-month-btn">
+            🔄 New Month
+          </button>
+        </div>
+      )}
+
       {/* People Management */}
       <div className="card">
         <h2>👥 People</h2>
@@ -161,19 +242,78 @@ export default function App() {
             onChange={e => setNewPersonName(e.target.value)}
             onKeyPress={e => e.key === 'Enter' && addPerson()}
           />
+          <input
+            type="number"
+            placeholder="Monthly budget"
+            value={newPersonBudget}
+            onChange={e => setNewPersonBudget(e.target.value)}
+            step="0.01"
+            onKeyPress={e => e.key === 'Enter' && addPerson()}
+          />
           <button onClick={addPerson}>Add</button>
         </div>
         {people.length === 0 ? (
           <div className="empty-state">No people added yet</div>
         ) : (
           people.map(person => (
-            <div key={person} className="person-item">
-              <span>{person}</span>
-              <button onClick={() => removePerson(person)}>Remove</button>
+            <div key={person.name} className="person-item">
+              <span>{person.name}</span>
+              <button onClick={() => removePerson(person.name)}>Remove</button>
             </div>
           ))
         )}
       </div>
+
+      {/* Wallets with Dues */}
+      {people.length > 0 && (
+        <>
+          {(() => {
+            const wallets = calculateWallets();
+            const dues = calculateDues();
+            return people.map(person => {
+              const wallet = wallets[person.name];
+              const personDues = dues.filter(d => d.from === person.name || d.to === person.name);
+              return (
+                <div key={person.name} className={`card wallet-card ${wallet < 0 ? 'wallet-danger' : ''}`}>
+                  <h3>{person.name}</h3>
+                  <div className="wallet-info">
+                    <div className="wallet-row">
+                      <span className="wallet-label">Monthly Budget:</span>
+                      <span className="wallet-value">₹{person.monthlyBudget.toFixed(2)}</span>
+                    </div>
+                    <div className={`wallet-row ${wallet < 0 ? 'wallet-warning' : ''}`}>
+                      <span className="wallet-label">Wallet Left:</span>
+                      <span className={`wallet-value ${wallet < 0 ? 'wallet-negative' : ''}`}>
+                        ₹{wallet.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  {personDues.length > 0 && (
+                    <div className="dues-section">
+                      <h4>💳 Dues</h4>
+                      {personDues.map((due, idx) => (
+                        <div key={idx} className="due-item">
+                          {due.from === person.name ? (
+                            <span>{person.name} needs to pay {due.to} <strong>₹{due.amount.toFixed(2)}</strong></span>
+                          ) : (
+                            <span>{due.from} needs to pay {person.name} <strong>₹{due.amount.toFixed(2)}</strong></span>
+                          )}
+                          <button 
+                            className="mark-paid-btn"
+                            onClick={() => markAsPaid(due.from, due.to, due.amount)}
+                          >
+                            ✓ Mark as Paid
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
+        </>
+      )}
 
       {/* Add Expense */}
       {people.length > 0 && (
@@ -202,7 +342,7 @@ export default function App() {
             >
               <option value="">Who paid?</option>
               {people.map(person => (
-                <option key={person} value={person}>{person}</option>
+                <option key={person.name} value={person.name}>{person.name}</option>
               ))}
             </select>
             <div>
@@ -211,14 +351,14 @@ export default function App() {
               </label>
               <div className="checkbox-group">
                 {people.map(person => (
-                  <div key={person} className="checkbox-item">
+                  <div key={person.name} className="checkbox-item">
                     <input
                       type="checkbox"
-                      id={`split-${person}`}
-                      checked={expenseForm.splitBetween[person] || false}
-                      onChange={() => handleSplitChange(person)}
+                      id={`split-${person.name}`}
+                      checked={expenseForm.splitBetween[person.name] || false}
+                      onChange={() => handleSplitChange(person.name)}
                     />
-                    <label htmlFor={`split-${person}`}>{person}</label>
+                    <label htmlFor={`split-${person.name}`}>{person.name}</label>
                   </div>
                 ))}
               </div>
@@ -262,14 +402,17 @@ export default function App() {
           {people.length === 0 ? (
             <div className="empty-state">No people to show balances</div>
           ) : (
-            people.map(person => (
-              <div key={person} className="balance-item">
-                <span className="balance-item-name">{person}</span>
-                <span className={`balance-item-amount ${balances[person] > 0 ? 'balance-positive' : balances[person] < 0 ? 'balance-negative' : ''}`}>
-                  {balances[person] > 0 ? '+' : ''} ₹{balances[person].toFixed(2)}
-                </span>
-              </div>
-            ))
+            people.map(person => {
+              const balances = calculateBalances();
+              return (
+                <div key={person.name} className="balance-item">
+                  <span className="balance-item-name">{person.name}</span>
+                  <span className={`balance-item-amount ${balances[person.name] > 0 ? 'balance-positive' : balances[person.name] < 0 ? 'balance-negative' : ''}`}>
+                    {balances[person.name] > 0 ? '+' : ''} ₹{balances[person.name].toFixed(2)}
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
       )}
@@ -278,26 +421,30 @@ export default function App() {
       {people.length > 0 && (
         <div className="card">
           <h2>🤝 Settle Up</h2>
-          {transactions.length === 0 ? (
-            <div className="empty-state">Everyone is settled up!</div>
-          ) : (
-            <>
-              {transactions.map((transaction, index) => (
-                <div key={index} className="transaction-item">
-                  <span className="transaction-text">
-                    <strong>{transaction.from}</strong> pays <strong>{transaction.to}</strong>{' '}
-                    <span className="transaction-amount">₹{transaction.amount.toFixed(2)}</span>
-                  </span>
+          {(() => {
+            const dues = calculateDues();
+            if (dues.length === 0) {
+              return <div className="empty-state">Everyone is settled up!</div>;
+            }
+            return (
+              <>
+                {dues.map((due, index) => (
+                  <div key={index} className="transaction-item">
+                    <span className="transaction-text">
+                      <strong>{due.from}</strong> pays <strong>{due.to}</strong>{' '}
+                      <span className="transaction-amount">₹{due.amount.toFixed(2)}</span>
+                    </span>
+                  </div>
+                ))}
+                <div className="button-group">
+                  <button className="copy-button" onClick={copyToClipboard}>
+                    📋 Copy Summary
+                  </button>
                 </div>
-              ))}
-              <div className="button-group">
-                <button className="copy-button" onClick={copyToClipboard}>
-                  📋 Copy Summary
-                </button>
-              </div>
-              {copyMessage && <div className="success">{copyMessage}</div>}
-            </>
-          )}
+                {copyMessage && <div className="success">{copyMessage}</div>}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

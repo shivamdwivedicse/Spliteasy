@@ -297,6 +297,128 @@ h1 {
   background: #229954 !important;
 }
 
+.reset-month-btn {
+  width: 100%;
+  padding: 12px;
+  background: #f39c12;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.reset-month-btn:hover {
+  background: #e67e22;
+}
+
+.wallet-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid #667eea;
+}
+
+.wallet-card h3 {
+  color: #333;
+  font-size: 1.2rem;
+  margin-bottom: 16px;
+}
+
+.wallet-info {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.wallet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.wallet-row:not(:last-child) {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.wallet-label {
+  font-weight: 600;
+  color: #666;
+}
+
+.wallet-value {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: #27ae60;
+}
+
+.wallet-negative {
+  color: #e74c3c !important;
+}
+
+.wallet-warning {
+  background-color: #ffe6e6;
+}
+
+.wallet-danger {
+  border-left-color: #e74c3c;
+  background-color: #fff5f5;
+}
+
+.dues-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+}
+
+.dues-section h4 {
+  color: #333;
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.due-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid #f39c12;
+}
+
+.due-item span {
+  flex: 1;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.mark-paid-btn {
+  padding: 6px 12px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 8px;
+  transition: background 0.3s;
+}
+
+.mark-paid-btn:hover {
+  background: #229954;
+}
+
 .error {
   color: #e74c3c;
   font-size: 0.9rem;
@@ -336,5 +458,16 @@ h1 {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+  }
+
+  .due-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .mark-paid-btn {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
   }
 }

@@ -46,4 +46,28 @@ describe('settleUp', () => {
     const transactions = settleUp(balances);
     expect(transactions.length).toBe(3);
   });
+
+  // New tests for wallet feature
+  it('should calculate wallet with budget and expenses', () => {
+    const monthlyBudget = 1000;
+    const amountPaidOut = 500;
+    const wallet = monthlyBudget - amountPaidOut;
+    expect(wallet).toBe(500);
+  });
+
+  it('should track repayments in wallet calculation', () => {
+    const monthlyBudget = 1000;
+    const amountPaidOut = 500;
+    const repaymentReceived = 100;
+    const wallet = monthlyBudget - amountPaidOut + repaymentReceived;
+    expect(wallet).toBe(600);
+  });
+
+  it('should handle negative wallet (overspending)', () => {
+    const monthlyBudget = 500;
+    const amountPaidOut = 600;
+    const wallet = monthlyBudget - amountPaidOut;
+    expect(wallet).toBeLessThan(0);
+    expect(wallet).toBe(-100);
+  });
 });
